@@ -62,3 +62,57 @@ jobs:
       - name: Build examples
         working-directory: examples
         run: cargo build --all-targets
+
+  wasm:
+    name: wasm (emscripten)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-emscripten
+
+      - name: Add wasm32-unknown-emscripten target
+        # Belt and suspenders: dtolnay/rust-toolchain's `targets:` is
+        # supposed to install the libstd component, but in some runs the
+        # subsequent `cargo build --target wasm32-unknown-emscripten`
+        # still errors with "can't find crate for `core`". An explicit
+        # `rustup target add` is idempotent and guarantees the target
+        # stdlib is in place before cargo runs.
+        run: rustup target add wasm32-unknown-emscripten
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-emscripten
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          # Pinned: emsdk 5.0.7 ships a wasm-opt whose `--asyncify` pass
+          # fails on wasm built with `-fwasm-exceptions`. raylib's audio
+          # backend needs ASYNCIFY and rustc 1.93+ emits `-fwasm-exceptions`
+          # unconditionally on this target, so 5.0.7 cannot link our wasm.
+          # 5.0.6 has both passes working. See `book/src/web.md`.
+          version: 5.0.6
+          actions-cache-folder: emsdk-cache
+
+      - name: Build sola-raylib (wasm)
+        run: cargo build --release -p sola-raylib --target wasm32-unknown-emscripten
+
+      - name: Build hello_raylib example (wasm)
+        # `examples/.cargo/config.toml` supplies the link flags raylib
+        # needs (USE_GLFW, ASYNCIFY, FORCE_FILESYSTEM, SUPPORT_LONGJMP,
+        # EXPORTED_RUNTIME_METHODS, ALLOW_MEMORY_GROWTH).
+        working-directory: examples
+        run: cargo build --release --bin hello_raylib --target wasm32-unknown-emscripten
+
+      - name: Upload wasm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello_raylib-wasm
+          path: |
+            examples/target/wasm32-unknown-emscripten/release/hello_raylib.js
+            examples/target/wasm32-unknown-emscripten/release/hello_raylib.wasm
