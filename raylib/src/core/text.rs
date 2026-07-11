@@ -92,7 +92,7 @@ impl RaylibHandle {
 
         unsafe {
             Codepoints(std::mem::ManuallyDrop::new(Box::from_raw(
-                std::ptr::slice_from_raw_parts_mut(u, text.len()),
+                std::ptr::slice_from_raw_parts_mut(u, len as usize),
             )))
         }
     }
@@ -192,7 +192,7 @@ impl RaylibHandle {
                         file_data.len() as i32,
                         font_size,
                         co.0.as_mut_ptr(),
-                        c.len() as i32,
+                        c.chars().count() as i32,
                     )
                 }
                 None => ffi::LoadFontFromMemory(
